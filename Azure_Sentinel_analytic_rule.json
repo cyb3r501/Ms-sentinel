@@ -1,0 +1,60 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/19eb8dbf-c18d-4c41-a932-aa42bc8c5e03')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/19eb8dbf-c18d-4c41-a932-aa42bc8c5e03')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2023-12-01-preview",
+            "properties": {
+                "displayName": "Custom_EntraID_Insider Risk_Risky User Access By Application",
+                "description": "Detects Microsoft Entra ID Sign in risk via Machine Learning correlations in the basket operator. The basket threshold is adjustable, and the default is set to .01. There is an optional configuration to configure the percentage rates. The correlations are designed to leverage machine learning to identify patterns of risky user application access.",
+                "severity": "Medium",
+                "enabled": true,
+                "query": "SigninLogs\r\n| where RiskState == \"atRisk\"\r\n| project UserPrincipalName, Location, AppDisplayName, RiskState\r\n| evaluate basket(0.01) \r\n| where UserPrincipalName <> \"\"\r\n| where AppDisplayName <> \"\"\r\n| project Percent, UserPrincipalName, Location, AppDisplayName, RiskState\r\n| sort by Percent desc\r\n| extend\r\n    AccountName = tostring(split(UserPrincipalName, \"@\")[0]),\r\n    AccountUPNSuffix = tostring(split(UserPrincipalName, \"@\")[1])\r\n| extend AR = \"ET_Corp_Entra_ID Insider Risky User access by application detected\",\r\n    Author = \"Sentinel@Wipro.team\",\r\n    Version = \"1.0\", \r\n    Stage =\"Prod\",\r\n    SourceTable = \"SigninLogs\"\r\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT1H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution"
+                ],
+                "techniques": [
+                    "T0863"
+                ],
+                "subTechniques": [],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": null,
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
