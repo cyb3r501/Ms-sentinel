@@ -1,1 +1,1186 @@
-
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "",
+        "description":  "",
+        "prerequisites":  "",
+        "postDeployment":  [
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "author":  ""
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "Threat_intel_feed_hackernews_logic_app",
+            "type":  "string"
+        },
+        "RssConnectionName":  {
+            "defaultValue":  "[concat('Rss-', parameters('PlaybookName'))]",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Name of the new Rss connection to create. Ignored when RssConnectionResourceId is provided."
+            }
+        },
+        "RssConnectionResourceId":  {
+            "defaultValue":  "",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Resource ID of an existing Rss connection to reuse. Leave empty to create a new connection."
+            }
+        },
+        "MicrosoftSentinelConnectionName":  {
+            "defaultValue":  "[concat('MicrosoftSentinel-', parameters('PlaybookName'))]",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Name of the new Azuresentinel connection to create. Ignored when MicrosoftSentinelConnectionResourceId is provided."
+            }
+        },
+        "MicrosoftSentinelConnectionResourceId":  {
+            "defaultValue":  "",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Resource ID of an existing Azuresentinel connection to reuse. Leave empty to create a new connection."
+            }
+        },
+        "Diageo-Info-Find-Vulnerability-By-HashConnectionName":  {
+            "defaultValue":  "[concat('Diageo-Info-Find-Vulnerability-By-Hash-', parameters('PlaybookName'))]",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Name of the new Diageo-Info-Find-Vulnerability-By-Hash connection to create. Ignored when Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId is provided."
+            }
+        },
+        "Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId":  {
+            "defaultValue":  "",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Resource ID of an existing Diageo-Info-Find-Vulnerability-By-Hash connection to reuse. Leave empty to create a new connection."
+            }
+        },
+        "TeamsConnectionName":  {
+            "defaultValue":  "[concat('Teams-', parameters('PlaybookName'))]",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Name of the new Teams connection to create. Ignored when TeamsConnectionResourceId is provided."
+            }
+        },
+        "TeamsConnectionResourceId":  {
+            "defaultValue":  "",
+            "type":  "string",
+            "metadata":  {
+                "description":  "Resource ID of an existing Teams connection to reuse. Leave empty to create a new connection."
+            }
+        }
+    },
+    "variables":  {
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        }
+                    },
+                    "triggers":  {
+                        "Hacker_News":  {
+                            "recurrence":  {
+                                "interval":  3,
+                                "frequency":  "Minute"
+                            },
+                            "evaluatedRecurrence":  {
+                                "interval":  3,
+                                "frequency":  "Minute"
+                            },
+                            "splitOn":  "@triggerBody()?['value']",
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['rss-1']['connectionId']"
+                                    }
+                                },
+                                "method":  "get",
+                                "path":  "/OnNewFeed",
+                                "queries":  {
+                                    "feedUrl":  "@{encodeURIComponent(encodeURIComponent('https://feeds.feedburner.com/TheHackersNews/'))}",
+                                    "sinceProperty":  "PublishDate"
+                                }
+                            }
+                        }
+                    },
+                    "actions":  {
+                        "Condition_1":  {
+                            "actions":  {
+                                "Create_incident":  {
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['azuresentinel']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "put",
+                                        "body":  {
+                                            "title":  "CTI - @{triggerBody()?['title']}",
+                                            "severity":  "Informational",
+                                            "status":  "New",
+                                            "description":  "@{triggerBody()?['summary']}, @{triggerBody()?['links'][0]}",
+                                            "owner":  "@variables('shiftuser')",
+                                            "ownerAction":  "Assign",
+                                            "tagsToAdd":  {
+                                                "TagsToAdd":  [
+                                                    {
+                                                        "Tag":  "Threat Intel"
+                                                    }
+                                                ]
+                                            }
+                                        },
+                                        "path":  "/Incidents/subscriptions/@{encodeURIComponent('85555e5b-c746-410b-8b6a-fff78c357568')}/resourceGroups/@{encodeURIComponent('diageo-information-security-prod-eun-rg-sentinel')}/workspaces/@{encodeURIComponent('diageo-information-security-eun-la-sentinel')}"
+                                    }
+                                },
+                                "Machine_Details_from_CVE_Details":  {
+                                    "runAfter":  {
+                                        "Create_incident":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['diageo-info-find-vulnerability-by-hash']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/api/findvulnerabilityofdevicebyhash",
+                                        "queries":  {
+                                            "RSS_Summary":  "@triggerBody()?['summary']",
+                                            "code":  "qkVs9rZpopjlKAwmodioqJr-mfEAYDX3v0tvreMtJEJVAzFucmDYtg=="
+                                        }
+                                    }
+                                },
+                                "CVE_not_exists":  {
+                                    "runAfter":  {
+                                        "Machine_Details_from_CVE_Details":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@body('Machine_Details_from_CVE_Details')?['CVE-details']"
+                                },
+                                "Effected_Devices_details_of_CVE_from_WIZ":  {
+                                    "runAfter":  {
+                                        "CVE_not_exists":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "ApiConnection",
+                                    "inputs":  {
+                                        "host":  {
+                                            "connection":  {
+                                                "name":  "@parameters('$connections')['diageo-info-find-vulnerability-by-hash']['connectionId']"
+                                            }
+                                        },
+                                        "method":  "get",
+                                        "path":  "/api/finddeviceseffectedbyCVE",
+                                        "queries":  {
+                                            "RSS_Summary":  "@triggerBody()?['summary']",
+                                            "code":  "WsMAo54Ld8TwajbnOasnwxBzwmxIfA3d2GTgdG7SK-j6AzFudRJKdw=="
+                                        }
+                                    }
+                                },
+                                "Device_details_of_WIZ":  {
+                                    "runAfter":  {
+                                        "Effected_Devices_details_of_CVE_from_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['Device_Details']"
+                                },
+                                "CVE_Device_Details":  {
+                                    "foreach":  "@body('Machine_Details_from_CVE_Details')?['Machines']",
+                                    "actions":  {
+                                        "Append_to_array_variable_of_CVE_Device_Details":  {
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "machines",
+                                                "value":  {
+                                                    "title":  "@items('CVE_Device_Details')?['CVE-ID']",
+                                                    "value":  "@items('CVE_Device_Details')?['Device-name']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Device_details_of_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Device_Details_from_WIZ":  {
+                                    "foreach":  "@outputs('Device_details_of_WIZ')",
+                                    "actions":  {
+                                        "Append_to_array_variable_of_Device_Details_from_WIZ":  {
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "wize_devices",
+                                                "value":  {
+                                                    "title":  "@items('Device_Details_from_WIZ')?['CVE-ID']",
+                                                    "value":  "@items('Device_Details_from_WIZ')?['Device-details']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Device_details_of_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "Defender_CVE_Device_Affected_Details":  {
+                                    "runAfter":  {
+                                        "Device_details_of_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  [
+                                        {
+                                            "title":  "CVE-ID:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['CVE_Name']"
+                                        },
+                                        {
+                                            "title":  "Severity:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['severity']"
+                                        },
+                                        {
+                                            "title":  "Published On:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['publishedOn']"
+                                        },
+                                        {
+                                            "title":  "Last Updated:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['updatedOn']"
+                                        },
+                                        {
+                                            "title":  "firstDetected:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['firstDetected']"
+                                        },
+                                        {
+                                            "title":  "patchFirstAvailable:",
+                                            "value":  "@body('Machine_Details_from_CVE_Details')?['CVE-result'][0]?['patchFirstAvailable']"
+                                        }
+                                    ]
+                                },
+                                "CVE_Result":  {
+                                    "foreach":  "@body('Machine_Details_from_CVE_Details')?['CVE-result']",
+                                    "actions":  {
+                                        "Append_to_array_variable_of_CVE_Result":  {
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "CVE_Details",
+                                                "value":  {
+                                                    "CVE-Name":  "@items('CVE_Result')?['CVE_Name']",
+                                                    "Severity":  "@items('CVE_Result')?['Severity']",
+                                                    "publishedOn":  "@items('CVE_Result')?['publishedOn']",
+                                                    "updatedOn":  "@items('CVE_Result')?['updatedOn']",
+                                                    "firstDetected":  "@items('CVE_Result')?['firstDetected']",
+                                                    "patchFirstAvailable":  "@items('CVE_Result')?['patchFirstAvailable']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Defender_CVE_Device_Affected_Details":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "WIZ_CVE_Device_Affected_Details":  {
+                                    "runAfter":  {
+                                        "Device_details_of_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  [
+                                        {
+                                            "title":  "CVE-ID:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['CVE-ID']"
+                                        },
+                                        {
+                                            "title":  "detailedName:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['detailedName']"
+                                        },
+                                        {
+                                            "title":  "severity",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['severity']"
+                                        },
+                                        {
+                                            "title":  "score:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['score']"
+                                        },
+                                        {
+                                            "title":  "impactScore:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['impactScore']"
+                                        },
+                                        {
+                                            "title":  "firstDetectedAt:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['firstDetectedAt']"
+                                        },
+                                        {
+                                            "title":  "lastDetectedAt:",
+                                            "value":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details'][0]?['lastDetectedAt']"
+                                        }
+                                    ]
+                                },
+                                "WIZ_Device_CVE_details":  {
+                                    "foreach":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details']",
+                                    "actions":  {
+                                        "Append_to_array_variable_of_WIZ_CVE_details":  {
+                                            "type":  "AppendToArrayVariable",
+                                            "inputs":  {
+                                                "name":  "wiz_cve_details",
+                                                "value":  {
+                                                    "CVE-ID":  "@items('WIZ_Device_CVE_details')?['CVE-ID']",
+                                                    "detailedName":  "@items('WIZ_Device_CVE_details')?['detailedName']",
+                                                    "severity":  "@items('WIZ_Device_CVE_details')?['severity']",
+                                                    "score":  "@items('WIZ_Device_CVE_details')?['score']",
+                                                    "status":  "@items('WIZ_Device_CVE_details')?['status']",
+                                                    "impactScore":  "@items('WIZ_Device_CVE_details')?['impactScore']",
+                                                    "firstDetectedAt":  "@items('WIZ_Device_CVE_details')?['firstDetectedAt']",
+                                                    "lastDetectedAt":  "@items('WIZ_Device_CVE_details')?['lastDetectedAt']"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "WIZ_CVE_Device_Affected_Details":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Foreach"
+                                },
+                                "String_to_json_of_WIZ":  {
+                                    "runAfter":  {
+                                        "CVE_Result":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ],
+                                        "CVE_Device_Details":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ],
+                                        "Device_Details_from_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ],
+                                        "WIZ_Device_CVE_details":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  {
+                                        "type":  "FactSet",
+                                        "facts":  "@variables('wize_devices')"
+                                    }
+                                },
+                                "HTML_to_text":  {
+                                    "runAfter":  {
+                                        "String_to_json_of_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@replace(\n  replace(\n    replace(\n      replace(\n        replace(triggerBody()?['summary'], '\u003ch4\u003e', ''),\n      '\u003c/h4\u003e', ''),\n    '\u003cp\u003e', ''),\n  '\u003c/p\u003e', ''),\n'\"', '')"
+                                },
+                                "String_to_Json_of_Defender":  {
+                                    "runAfter":  {
+                                        "HTML_to_text":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  {
+                                        "type":  "FactSet",
+                                        "facts":  "@variables('machines')"
+                                    }
+                                },
+                                "Check_CVE_Device_exists":  {
+                                    "runAfter":  {
+                                        "String_to_Json_of_Defender":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n  empty(body('Machine_Details_from_CVE_Details')?['Machines']),\r\n  'true',\r\n  'false'\r\n)\r\n"
+                                },
+                                "Check_CVE_Device_exists_for_WIZ":  {
+                                    "runAfter":  {
+                                        "Check_CVE_Device_exists":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n  empty(body('Effected_Devices_details_of_CVE_from_WIZ')?['Device_Details']),\r\n  'true',\r\n  'false'\r\n)"
+                                },
+                                "Both_WIZ_and_Defender_CVE_is_not_exits":  {
+                                    "runAfter":  {
+                                        "Check_CVE_Device_exists_for_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n  and(\r\n    contains(\r\n      body('Machine_Details_from_CVE_Details')?['CVE-details'],\r\n      'CVE-ID does not exist in our environment'\r\n    ),\r\n    empty(\r\n      body('Effected_Devices_details_of_CVE_from_WIZ')?['Device_Details']\r\n    )\r\n  ),\r\n  true,\r\n  false\r\n)\r\n"
+                                },
+                                "CIV_exits_in_WIZ_but_not_in_Defender":  {
+                                    "runAfter":  {
+                                        "Both_WIZ_and_Defender_CVE_is_not_exits":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n  and(\r\n    contains(\r\n      body('Machine_Details_from_CVE_Details')?['CVE-details'],\r\n      'CVE-ID does not exist in our environment'\r\n    ),\r\n    not(\r\n      empty(\r\n        body('Effected_Devices_details_of_CVE_from_WIZ')?['Device_Details']\r\n      )\r\n    )\r\n  ),\r\n  true,\r\n  false\r\n)\r\n"
+                                },
+                                "CVE_Details_exits_in_defender_not_WIZ":  {
+                                    "runAfter":  {
+                                        "CIV_exits_in_WIZ_but_not_in_Defender":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n  and(\r\n    empty(body('Effected_Devices_details_of_CVE_from_WIZ')?['Device_Details']),\r\n    not(\r\n      empty(body('Machine_Details_from_CVE_Details')?['CVE-result'])\r\n    )\r\n  ),\r\n  true,\r\n  false\r\n)"
+                                },
+                                "Compose_2":  {
+                                    "runAfter":  {
+                                        "CVE_Details_exits_in_defender_not_WIZ":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@if(\r\n    empty(outputs('CVE_not_exists')),\r\n    if(\r\n        empty(variables('CVE_Details')),\r\n        'Empty',\r\n        'Not Empty'\r\n    ),\r\n    'Not Empty'\r\n)"
+                                },
+                                "Compose":  {
+                                    "runAfter":  {
+                                        "Compose_2":  [
+                                            "Succeeded",
+                                            "Failed"
+                                        ]
+                                    },
+                                    "type":  "Compose",
+                                    "inputs":  "@body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE_details']"
+                                },
+                                "CVE_does_not_exist_in_both_Defender_and_WIZ":  {
+                                    "actions":  {
+                                        "Diageo_Teams_Channel_2":  {
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "body":  {
+                                                    "recipient":  "19:a77dafe1c755451482c182ccb40290d2@thread.v2",
+                                                    "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        {\n          \"title\": \"Title:\",\n          \"value\": \"@{triggerBody()?['title']}\"\n        },\n        {\n          \"title\": \"CVE ID:\",\n          \"value\": \"@{body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE'][0]}\"\n        },\n        {\n          \"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n        },\n        {\n          \"title\": \"Feed Primary Link:\",\n         \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\"\n        }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? This CVE is currently **not observed** in both WIZ and Microsoft Defender environments.\",\n      \"wrap\": true,\n      \"spacing\": \"Medium\",\n      \"color\": \"Good\"\n    },    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackernews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                },
+                                                "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                            }
+                                        },
+                                        "Wipro_Teams_Channel_3":  {
+                                            "runAfter":  {
+                                                "Diageo_Teams_Channel_2":  [
+                                                    "Succeeded"
+                                                ]
+                                            },
+                                            "type":  "ApiConnection",
+                                            "inputs":  {
+                                                "host":  {
+                                                    "connection":  {
+                                                        "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                    }
+                                                },
+                                                "method":  "post",
+                                                "body":  {
+                                                    "recipient":  "19:fb52d6c185c14167b6c4896ed17cef84@thread.v2",
+                                                    "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        {\n          \"title\": \"Title:\",\n          \"value\": \"@{triggerBody()?['title']}\"\n        },\n        {\n          \"title\": \"CVE ID:\",\n          \"value\": \"@{body('Effected_Devices_details_of_CVE_from_WIZ')?['CVE'][0]}\"\n        },\n        {\n          \"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n        },\n        {\n          \"title\": \"Feed Primary Link:\",\n         \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\"\n        }\n      ]\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? This CVE is currently **not observed** in both WIZ and Microsoft Defender environments.\",\n      \"wrap\": true,\n      \"spacing\": \"Medium\",\n      \"color\": \"Good\"\n    },    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackernews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                },
+                                                "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                            }
+                                        }
+                                    },
+                                    "runAfter":  {
+                                        "Compose":  [
+                                            "Succeeded"
+                                        ]
+                                    },
+                                    "else":  {
+                                        "actions":  {
+                                            "CVE_exits_in_Defender_not_in_WIZ":  {
+                                                "actions":  {
+                                                    "Diageo_Teams_channel_3":  {
+                                                        "type":  "ApiConnection",
+                                                        "inputs":  {
+                                                            "host":  {
+                                                                "connection":  {
+                                                                    "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method":  "post",
+                                                            "body":  {
+                                                                "recipient":  "19:a77dafe1c755451482c182ccb40290d2@thread.v2",
+                                                                "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Title:\", \"value\": \"@{triggerBody()?['title']}\" },\n        { \"title\": \"Feed Summary:\", \"value\": \"@{outputs('HTML_to_text')}\" },\n        { \"title\": \"Feed Primary Link:\",  \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\" }\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"text\": \"??? Affected Assets (Defender)\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Accent\",\n      \"spacing\": \"Medium\"\n    },\n\n    {\n      \"type\": \"ColumnSet\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"columns\": [\n        {\n          \"type\": \"Column\",\n          \"width\": \"auto\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }\n          ]\n        },\n        {\n          \"type\": \"Column\",\n          \"width\": \"stretch\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }\n          ]\n        }\n      ]\n    },\n@{outputs('String_to_Json_of_Defender')},\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": true,\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('Defender_CVE_Device_Affected_Details')}\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists')},\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (Microsoft Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"No devices affected in Microsoft Defender\",\n          \"wrap\": true\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Visibility Alert (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"The specified CVE was not found in the WIZ vulnerability database.\",\n          \"wrap\": true\n        }\n      ]\n    },    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackersnews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                            },
+                                                            "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                        }
+                                                    },
+                                                    "Wipro_Teams_channel_5":  {
+                                                        "runAfter":  {
+                                                            "Diageo_Teams_channel_3":  [
+                                                                "Succeeded"
+                                                            ]
+                                                        },
+                                                        "type":  "ApiConnection",
+                                                        "inputs":  {
+                                                            "host":  {
+                                                                "connection":  {
+                                                                    "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                }
+                                                            },
+                                                            "method":  "post",
+                                                            "body":  {
+                                                                "recipient":  "19:fb52d6c185c14167b6c4896ed17cef84@thread.v2",
+                                                                "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Title:\", \"value\": \"@{triggerBody()?['title']}\" },\n        { \"title\": \"Feed Summary:\",           \"value\": \"@{outputs('HTML_to_text')}\" },\n        { \"title\": \"Feed Primary Link:\",  \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\" }\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"text\": \"??? Affected Assets (Defender)\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Accent\",\n      \"spacing\": \"Medium\"\n    },\n\n    {\n      \"type\": \"ColumnSet\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"columns\": [\n        {\n          \"type\": \"Column\",\n          \"width\": \"auto\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }\n          ]\n        },\n        {\n          \"type\": \"Column\",\n          \"width\": \"stretch\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }\n          ]\n        }\n      ]\n    },\n@{outputs('String_to_Json_of_Defender')},\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": true,\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('Defender_CVE_Device_Affected_Details')}\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists')},\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (Microsoft Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"No devices affected in Microsoft Defender\",\n          \"wrap\": true\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Visibility Alert (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"The specified CVE was not found in the WIZ vulnerability database.\",\n          \"wrap\": true\n        }\n      ]\n    },    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackernews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                            },
+                                                            "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                        }
+                                                    }
+                                                },
+                                                "else":  {
+                                                    "actions":  {
+                                                        "CVE_exits_in_WIZ_not_in_defender":  {
+                                                            "actions":  {
+                                                                "Diageo_Teams_Channel_4":  {
+                                                                    "type":  "ApiConnection",
+                                                                    "inputs":  {
+                                                                        "host":  {
+                                                                            "connection":  {
+                                                                                "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method":  "post",
+                                                                        "body":  {
+                                                                            "recipient":  "19:a77dafe1c755451482c182ccb40290d2@thread.v2",
+                                                                            "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Title:\", \"value\": \"@{triggerBody()?['title']}\" },\n        { \"title\": \"Feed Summary:\",          \"value\": \"@{outputs('HTML_to_text')}\"},\n        { \"title\": \"Feed Primary Link:\",  \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\" }\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"text\": \"??? Affected Assets (Defender)\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Accent\",\n      \"spacing\": \"Medium\"\n    },\n\n    {\n      \"type\": \"ColumnSet\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"columns\": [\n        {\n          \"type\": \"Column\",\n          \"width\": \"auto\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }\n          ]\n        },\n        {\n          \"type\": \"Column\",\n          \"width\": \"stretch\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }\n          ]\n        }\n      ]\n    },\n@{outputs('String_to_json_of_WIZ')},\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": true,\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('WIZ_CVE_Device_Affected_Details')}\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists_for_WIZ')},\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"No devices affected in WIZ\",\n          \"wrap\": true\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Visibility Alert (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"The specified CVE was not found in the Defender vulnerability database.\",\n          \"wrap\": true\n        }\n      ]\n    },{\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackernews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                                        },
+                                                                        "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                    }
+                                                                },
+                                                                "Wipro_Teams_channel_4":  {
+                                                                    "runAfter":  {
+                                                                        "Diageo_Teams_Channel_4":  [
+                                                                            "Succeeded"
+                                                                        ]
+                                                                    },
+                                                                    "type":  "ApiConnection",
+                                                                    "inputs":  {
+                                                                        "host":  {
+                                                                            "connection":  {
+                                                                                "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                            }
+                                                                        },
+                                                                        "method":  "post",
+                                                                        "body":  {
+                                                                            "recipient":  "19:fb52d6c185c14167b6c4896ed17cef84@thread.v2",
+                                                                            "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n\n    {\n      \"type\": \"FactSet\",\n      \"facts\": [\n        { \"title\": \"Title:\", \"value\": \"@{triggerBody()?['title']}\" },\n        { \"title\": \"Feed Summary:\",          \"value\": \"@{outputs('HTML_to_text')}\" },\n        { \"title\": \"Feed Primary Link:\",  \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\" }\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"text\": \"??? Affected Assets (Defender)\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Accent\",\n      \"spacing\": \"Medium\"\n    },\n\n    {\n      \"type\": \"ColumnSet\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"columns\": [\n        {\n          \"type\": \"Column\",\n          \"width\": \"auto\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }\n          ]\n        },\n        {\n          \"type\": \"Column\",\n          \"width\": \"stretch\",\n          \"items\": [\n            { \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }\n          ]\n        }\n      ]\n    },\n@{outputs('String_to_json_of_WIZ')},\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": true,\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('WIZ_CVE_Device_Affected_Details')}\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists_for_WIZ')},\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"No devices affected in WIZ\",\n          \"wrap\": true\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Visibility Alert (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"The specified CVE was not found in the Defender vulnerability database.\",\n          \"wrap\": true\n        }\n      ]\n    },{\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackernews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                                        },
+                                                                        "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "else":  {
+                                                                "actions":  {
+                                                                    "Check_Machine_details_exist":  {
+                                                                        "actions":  {
+                                                                            "Diageo_Teams_Channel":  {
+                                                                                "type":  "ApiConnection",
+                                                                                "inputs":  {
+                                                                                    "host":  {
+                                                                                        "connection":  {
+                                                                                            "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method":  "post",
+                                                                                    "body":  {
+                                                                                        "recipient":  "19:a77dafe1c755451482c182ccb40290d2@thread.v2",
+                                                                                        "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n {\n      \"type\": \"FactSet\",\n      \"facts\": [\n\t        {\n\t           \"title\": \"Title:\",\n\t           \"value\": \"@{triggerBody()?['title']}\"\n        \t},\n        {\n          \"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n        },\n        {\n          \"title\": \"Feed Primary Link:\",\n          \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\"\n        }\n      ]\n},\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Automated CVE correlation from Microsoft Defender \u0026 WIZ\",\n      \"isSubtle\": true,\n      \"wrap\": true\n    },\n\n    /* ================= DEFENDER SECTION ================= */\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"attention\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('Defender_CVE_Device_Affected_Details')}\n       }\n     ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists')},\n      \"$when\": \"${defenderDevicesCount == 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? No devices affected in Microsoft Defender\",\n          \"color\": \"Warning\"\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"$when\": \"${defenderDevicesCount \u003e 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Affected Devices (Defender)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"ColumnSet\",\n          \"columns\": [\n            {\n              \"type\": \"Column\",\n              \"width\": \"auto\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }]\n            },\n            {\n              \"type\": \"Column\",\n              \"width\": \"stretch\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"Device Name\", \"weight\": \"Bolder\" }]\n            }\n          ]\n        },\n        @{outputs('String_to_Json_of_Defender')}\n      ]\n    },\n\n    /* ================= WIZ SECTION ================= */\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Details (WIZ)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('WIZ_CVE_Device_Affected_Details')}\n         }\n       ]\n    },\n\n    /* ---- WIZ: NO DEVICE AFFECTED ---- */\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists_for_WIZ')},\n      \"$when\": \"${wizDevicesCount == 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? Device Impact (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? No affected workloads found in WIZ\",\n          \"color\": \"Warning\"\n        }\n      ]\n    },\n\n    /* ---- WIZ: AFFECTED DEVICES ---- */\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"$when\": \"${wizDevicesCount \u003e 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? Affected Devices (WIZ)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"ColumnSet\",\n          \"columns\": [\n            {\n              \"type\": \"Column\",\n              \"width\": \"auto\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }]\n            },\n            {\n              \"type\": \"Column\",\n              \"width\": \"stretch\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }]\n            }\n          ]\n        },\n       @{outputs('String_to_json_of_WIZ')}\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackersnews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                                                    },
+                                                                                    "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                                }
+                                                                            },
+                                                                            "Wipro_Teams_Channel":  {
+                                                                                "runAfter":  {
+                                                                                    "Diageo_Teams_Channel":  [
+                                                                                        "Succeeded"
+                                                                                    ]
+                                                                                },
+                                                                                "type":  "ApiConnection",
+                                                                                "inputs":  {
+                                                                                    "host":  {
+                                                                                        "connection":  {
+                                                                                            "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                                        }
+                                                                                    },
+                                                                                    "method":  "post",
+                                                                                    "body":  {
+                                                                                        "recipient":  "19:fb52d6c185c14167b6c4896ed17cef84@thread.v2",
+                                                                                        "messageBody":  "{\n  \"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n  \"type\": \"AdaptiveCard\",\n  \"version\": \"1.5\",\n  \"body\": [\n {\n      \"type\": \"FactSet\",\n      \"facts\": [\n\t        {\n\t           \"title\": \"Title:\",\n\t           \"value\": \"@{triggerBody()?['title']}\"\n        \t},\n        {\n          \"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n        },\n        {\n          \"title\": \"Feed Primary Link:\",\n          \"value\": \"[?? View CVE Feed](@{triggerBody()?['primaryLink']})\"\n        }\n      ]\n},\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"?? Critical Vulnerability Alert\",\n      \"size\": \"Large\",\n      \"weight\": \"Bolder\",\n      \"color\": \"Attention\",\n      \"wrap\": true\n    },\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"Automated CVE correlation from Microsoft Defender \u0026 WIZ\",\n      \"isSubtle\": true,\n      \"wrap\": true\n    },\n\n    /* ================= DEFENDER SECTION ================= */\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"attention\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? CVE Details (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('Defender_CVE_Device_Affected_Details')}\n       }\n     ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists')},\n      \"$when\": \"${defenderDevicesCount == 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Device Impact (Defender)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? No devices affected in Microsoft Defender\",\n          \"color\": \"Warning\"\n        }\n      ]\n    },\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists'), 'true'),\n  'false',\n  'true'\n)},\n      \"$when\": \"${defenderDevicesCount \u003e 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? Affected Devices (Defender)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"ColumnSet\",\n          \"columns\": [\n            {\n              \"type\": \"Column\",\n              \"width\": \"auto\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }]\n            },\n            {\n              \"type\": \"Column\",\n              \"width\": \"stretch\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"Device Name\", \"weight\": \"Bolder\" }]\n            }\n          ]\n        },\n        @{outputs('String_to_Json_of_Defender')}\n      ]\n    },\n\n    /* ================= WIZ SECTION ================= */\n\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"spacing\": \"Medium\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? CVE Details (WIZ)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"FactSet\",\n          \"facts\": @{outputs('WIZ_CVE_Device_Affected_Details')}\n         }\n       ]\n    },\n\n    /* ---- WIZ: NO DEVICE AFFECTED ---- */\n    {\n      \"type\": \"Container\",\n      \"style\": \"warning\",\n      \"isVisible\": @{outputs('Check_CVE_Device_exists_for_WIZ')},\n      \"$when\": \"${wizDevicesCount == 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? Device Impact (WIZ)\",\n          \"weight\": \"Bolder\"\n        },\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"?? No affected workloads found in WIZ\",\n          \"color\": \"Warning\"\n        }\n      ]\n    },\n\n    /* ---- WIZ: AFFECTED DEVICES ---- */\n    {\n      \"type\": \"Container\",\n      \"style\": \"emphasis\",\n      \"isVisible\": @{if(\n  equals(outputs('Check_CVE_Device_exists_for_WIZ'), 'true'),\n  'false',\n  'true'\n)},\n      \"$when\": \"${wizDevicesCount \u003e 0}\",\n      \"items\": [\n        {\n          \"type\": \"TextBlock\",\n          \"text\": \"??? Affected Devices (WIZ)\",\n          \"weight\": \"Bolder\",\n          \"color\": \"Accent\"\n        },\n        {\n          \"type\": \"ColumnSet\",\n          \"columns\": [\n            {\n              \"type\": \"Column\",\n              \"width\": \"auto\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"CVE ID\", \"weight\": \"Bolder\" }]\n            },\n            {\n              \"type\": \"Column\",\n              \"width\": \"stretch\",\n              \"items\": [{ \"type\": \"TextBlock\", \"text\": \"Asset Name\", \"weight\": \"Bolder\" }]\n            }\n          ]\n        },\n       @{outputs('String_to_json_of_WIZ')}\n      ]\n    },\n\n    {\n      \"type\": \"TextBlock\",\n      \"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackersnews_logic_App\",\n      \"isSubtle\": true,\n      \"spacing\": \"Medium\"\n    }\n  ]\n}"
+                                                                                    },
+                                                                                    "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "else":  {
+                                                                            "actions":  {
+                                                                                "Diageo_Teams_Channel_":  {
+                                                                                    "type":  "ApiConnection",
+                                                                                    "inputs":  {
+                                                                                        "host":  {
+                                                                                            "connection":  {
+                                                                                                "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method":  "post",
+                                                                                        "body":  {
+                                                                                            "recipient":  "19:a77dafe1c755451482c182ccb40290d2@thread.v2",
+                                                                                            "messageBody":  "{\n\"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n\"type\": \"AdaptiveCard\",\n\"version\": \"1.5\",\n\"body\": [\n{\n\"type\": \"TextBlock\",\n\"text\": \"?? Threat Intel Alert\",\n\"size\": \"Large\",\n\"weight\": \"Bolder\",\n\"color\": \"Attention\",\n\"wrap\": true\n},\n{\n\"type\": \"FactSet\",\n\"facts\": [\n{\n\"title\": \"Title:\",\n\"value\": \"@{triggerBody()?['title']}\"\n},\n{\n\"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n},\n{\n\"title\": \"Feed Primary Link:\",\n\"value\": \"[?? View Link](@{triggerBody()?['primaryLink']})\"\n}\n]\n},\n{\n\"type\": \"TextBlock\",\n\"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackersnews_logic_App\",\n\"isSubtle\": true,\n\"spacing\": \"Medium\",\n\"wrap\": true\n}\n]\n}"
+                                                                                        },
+                                                                                        "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                                    }
+                                                                                },
+                                                                                "Wipro_Teams_Channel_2":  {
+                                                                                    "runAfter":  {
+                                                                                        "Diageo_Teams_Channel_":  [
+                                                                                            "Succeeded"
+                                                                                        ]
+                                                                                    },
+                                                                                    "type":  "ApiConnection",
+                                                                                    "inputs":  {
+                                                                                        "host":  {
+                                                                                            "connection":  {
+                                                                                                "name":  "@parameters('$connections')['teams-1']['connectionId']"
+                                                                                            }
+                                                                                        },
+                                                                                        "method":  "post",
+                                                                                        "body":  {
+                                                                                            "recipient":  "19:fb52d6c185c14167b6c4896ed17cef84@thread.v2",
+                                                                                            "messageBody":  "{\n\"$schema\": \"https://adaptivecards.io/schemas/adaptive-card.json\",\n\"type\": \"AdaptiveCard\",\n\"version\": \"1.5\",\n\"body\": [\n{\n\"type\": \"TextBlock\",\n\"text\": \"?? Threat Intel Alert\",\n\"size\": \"Large\",\n\"weight\": \"Bolder\",\n\"color\": \"Attention\",\n\"wrap\": true\n},\n{\n\"type\": \"FactSet\",\n\"facts\": [\n{\n\"title\": \"Title:\",\n\"value\": \"@{triggerBody()?['title']}\"\n},\n{\n\"title\": \"Feed Summary:\",\n          \"value\": \"@{outputs('HTML_to_text')}\"\n},\n{\n\"title\": \"Feed Primary Link:\",\n\"value\": \"[?? View Link](@{triggerBody()?['primaryLink']})\"\n}\n]\n},\n{\n\"type\": \"TextBlock\",\n\"text\": \"? Generated by SOAR Automation | Threat_intel_feed_hackersnews_logic_App\",\n\"isSubtle\": true,\n\"spacing\": \"Medium\",\n\"wrap\": true\n}\n]\n}"
+                                                                                        },
+                                                                                        "path":  "/v1.0/teams/conversation/adaptivecard/poster/Flow bot/location/@{encodeURIComponent('Group chat')}"
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        },
+                                                                        "expression":  {
+                                                                            "and":  [
+                                                                                {
+                                                                                    "equals":  [
+                                                                                        "@outputs('Compose_2')",
+                                                                                        "@string('Not Empty')"
+                                                                                    ]
+                                                                                }
+                                                                            ]
+                                                                        },
+                                                                        "type":  "If"
+                                                                    }
+                                                                }
+                                                            },
+                                                            "expression":  {
+                                                                "and":  [
+                                                                    {
+                                                                        "equals":  [
+                                                                            "@outputs('CIV_exits_in_WIZ_but_not_in_Defender')",
+                                                                            true
+                                                                        ]
+                                                                    }
+                                                                ]
+                                                            },
+                                                            "type":  "If"
+                                                        }
+                                                    }
+                                                },
+                                                "expression":  {
+                                                    "and":  [
+                                                        {
+                                                            "equals":  [
+                                                                "@outputs('CVE_Details_exits_in_defender_not_WIZ')",
+                                                                true
+                                                            ]
+                                                        }
+                                                    ]
+                                                },
+                                                "type":  "If"
+                                            }
+                                        }
+                                    },
+                                    "expression":  {
+                                        "and":  [
+                                            {
+                                                "equals":  [
+                                                    "@outputs('Both_WIZ_and_Defender_CVE_is_not_exits')",
+                                                    true
+                                                ]
+                                            }
+                                        ]
+                                    },
+                                    "type":  "If"
+                                }
+                            },
+                            "runAfter":  {
+                                "Delay":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "else":  {
+                                "actions":  {
+                                }
+                            },
+                            "expression":  {
+                                "or":  [
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Zero"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "exploit"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "remote code execution"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "0-day"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Known Exploited Vulnerab"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "CVE"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "UK"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Food"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Retailer"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Compromise"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "breach"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "uk's"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Data breach"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "remote code"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "critical security"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "unauthorized access"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "cyberattack"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Ransomware"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "claim"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Diageo"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Feed Title"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "ransomware"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['title']",
+                                            "zero-day"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['title']",
+                                            "AWS"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "AWS"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['title']",
+                                            "hack"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "hack"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "Threat actor"
+                                        ]
+                                    },
+                                    {
+                                        "contains":  [
+                                            "@triggerBody()?['summary']",
+                                            "outage"
+                                        ]
+                                    }
+                                ]
+                            },
+                            "type":  "If"
+                        },
+                        "prod-cybercoe-shift-ms_sentinel-shift_user_assignment":  {
+                            "runAfter":  {
+                            },
+                            "type":  "Workflow",
+                            "inputs":  {
+                                "host":  {
+                                    "workflow":  {
+                                        "id":  "/subscriptions/85555e5b-c746-410b-8b6a-fff78c357568/resourceGroups/diageo-information-security-prod-eun-rg-sentinel/providers/Microsoft.Logic/workflows/prod-cybercoe-shift-ms_sentinel-shift_user_assignment"
+                                    },
+                                    "triggerName":  "When_a_HTTP_request_is_received"
+                                }
+                            }
+                        },
+                        "Initialize_variables":  {
+                            "runAfter":  {
+                                "prod-cybercoe-shift-ms_sentinel-shift_user_assignment":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "InitializeVariable",
+                            "inputs":  {
+                                "variables":  [
+                                    {
+                                        "name":  "shiftuser",
+                                        "type":  "string",
+                                        "value":  "@{body('prod-cybercoe-shift-ms_sentinel-shift_user_assignment')['user']}"
+                                    },
+                                    {
+                                        "name":  "CVE_Details",
+                                        "type":  "array"
+                                    },
+                                    {
+                                        "name":  "machines",
+                                        "type":  "array"
+                                    },
+                                    {
+                                        "name":  "table_format",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "format",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "table_format2",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "format2",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "table_format3",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "Rss_feed_details",
+                                        "type":  "array"
+                                    },
+                                    {
+                                        "name":  "table_format4",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "wize_devices",
+                                        "type":  "array"
+                                    },
+                                    {
+                                        "name":  "format3",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "format4",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "wiz_cve_details",
+                                        "type":  "array"
+                                    },
+                                    {
+                                        "name":  "AffectedDevicesDefender",
+                                        "type":  "string"
+                                    },
+                                    {
+                                        "name":  "AffectedDevicesWIZ",
+                                        "type":  "string"
+                                    }
+                                ]
+                            }
+                        },
+                        "Delay":  {
+                            "runAfter":  {
+                                "Initialize_variables":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "Wait",
+                            "inputs":  {
+                                "interval":  {
+                                    "count":  45,
+                                    "unit":  "Second"
+                                }
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "rss-1":  {
+                                "connectionId":  "[if(empty(parameters('RssConnectionResourceId')), resourceId('Microsoft.Web/connections', parameters('RssConnectionName')), parameters('RssConnectionResourceId'))]",
+                                "connectionName":  "[if(empty(parameters('RssConnectionResourceId')), parameters('RssConnectionName'), last(split(parameters('RssConnectionResourceId'), '/')))]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/rss')]",
+                                "connectionProperties":  {
+                                }
+                            },
+                            "azuresentinel":  {
+                                "connectionId":  "[if(empty(parameters('MicrosoftSentinelConnectionResourceId')), resourceId('Microsoft.Web/connections', parameters('MicrosoftSentinelConnectionName')), parameters('MicrosoftSentinelConnectionResourceId'))]",
+                                "connectionName":  "[if(empty(parameters('MicrosoftSentinelConnectionResourceId')), parameters('MicrosoftSentinelConnectionName'), last(split(parameters('MicrosoftSentinelConnectionResourceId'), '/')))]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]",
+                                "connectionProperties":  {
+                                    "authentication":  {
+                                        "type":  "ManagedServiceIdentity"
+                                    }
+                                }
+                            },
+                            "diageo-info-find-vulnerability-by-hash":  {
+                                "connectionId":  "[if(empty(parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId')), resourceId('Microsoft.Web/connections', parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionName')), parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId'))]",
+                                "connectionName":  "[if(empty(parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId')), parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionName'), last(split(parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId'), '/')))]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/customApis/diageo-info-find-vulnerability-by-hash')]",
+                                "connectionProperties":  {
+                                }
+                            },
+                            "teams-1":  {
+                                "connectionId":  "[if(empty(parameters('TeamsConnectionResourceId')), resourceId('Microsoft.Web/connections', parameters('TeamsConnectionName')), parameters('TeamsConnectionResourceId'))]",
+                                "connectionName":  "[if(empty(parameters('TeamsConnectionResourceId')), parameters('TeamsConnectionName'), last(split(parameters('TeamsConnectionResourceId'), '/')))]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]",
+                                "connectionProperties":  {
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2019-05-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', parameters('RssConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('MicrosoftSentinelConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', parameters('TeamsConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[parameters('RssConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "condition":  "[empty(parameters('RssConnectionResourceId'))]",
+            "properties":  {
+                "displayName":  "[parameters('RssConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/rss')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[parameters('MicrosoftSentinelConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "condition":  "[empty(parameters('MicrosoftSentinelConnectionResourceId'))]",
+            "properties":  {
+                "displayName":  "[parameters('MicrosoftSentinelConnectionName')]",
+                "customParameterValues":  {
+                },
+                "parameterValueType":  "Alternative",
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/azuresentinel')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "condition":  "[empty(parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionResourceId'))]",
+            "properties":  {
+                "displayName":  "[parameters('Diageo-Info-Find-Vulnerability-By-HashConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/customApis/diageo-info-find-vulnerability-by-hash')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[parameters('TeamsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "condition":  "[empty(parameters('TeamsConnectionResourceId'))]",
+            "properties":  {
+                "displayName":  "[parameters('TeamsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/teams')]"
+                }
+            }
+        }
+    ]
+}
